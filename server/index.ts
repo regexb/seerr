@@ -5,6 +5,7 @@ import DiscoverSlider from '@server/entity/DiscoverSlider';
 import { Session } from '@server/entity/Session';
 import { User } from '@server/entity/User';
 import { startJobs } from '@server/job/schedule';
+import feedManager from '@server/lib/feed';
 import notificationManager from '@server/lib/notifications';
 import DiscordAgent from '@server/lib/notifications/agents/discord';
 import EmailAgent from '@server/lib/notifications/agents/email';
@@ -137,6 +138,9 @@ app
       new WebhookAgent(),
       new WebPushAgent(),
     ]);
+
+    // Register Feed Providers
+    feedManager.registerProviders([]);
 
     const userRepository = getRepository(User);
     const totalUsers = await userRepository.count();
