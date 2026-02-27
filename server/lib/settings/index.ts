@@ -339,6 +339,19 @@ interface JobSettings {
   schedule: string;
 }
 
+export interface FeedModuleSettings {
+  enabled: boolean;
+  weight: number;
+  options?: Record<string, unknown>;
+}
+
+export interface FeedSettings {
+  runConcurrency: number;
+  maxItemsPerProvider: number;
+  rankedItemLimit: number;
+  providers: Record<string, FeedModuleSettings>;
+}
+
 export type JobId =
   | 'plex-recently-added-scan'
   | 'plex-full-scan'
@@ -352,7 +365,8 @@ export type JobId =
   | 'jellyfin-full-scan'
   | 'image-cache-cleanup'
   | 'availability-sync'
-  | 'process-blocklisted-tags';
+  | 'process-blocklisted-tags'
+  | 'feed-build';
 
 export interface AllSettings {
   clientId: string;
@@ -366,6 +380,7 @@ export interface AllSettings {
   sonarr: SonarrSettings[];
   public: PublicSettings;
   notifications: NotificationSettings;
+  feed: FeedSettings;
   jobs: Record<JobId, JobSettings>;
   network: NetworkSettings;
   metadataSettings: MetadataSettings;
@@ -541,6 +556,12 @@ class Settings {
           },
         },
       },
+      feed: {
+        runConcurrency: 3,
+        maxItemsPerProvider: 500,
+        rankedItemLimit: 500,
+        providers: {},
+      },
       jobs: {
         'plex-recently-added-scan': {
           schedule: '0 */5 * * * *',
@@ -580,6 +601,9 @@ class Settings {
         },
         'process-blocklisted-tags': {
           schedule: '0 30 1 */7 * *',
+        },
+        'feed-build': {
+          schedule: '0 0 * * * *',
         },
       },
       network: {
@@ -724,6 +748,14 @@ class Settings {
 
   set jobs(data: Record<JobId, JobSettings>) {
     this.data.jobs = data;
+  }
+
+  get feed(): FeedSettings {
+    return this.data.feed;
+  }
+
+  set feed(data: FeedSettings) {
+    this.data.feed = data;
   }
 
   get network(): NetworkSettings {

@@ -1,5 +1,6 @@
 import { MediaServerType } from '@server/constants/server';
 import blocklistedTagsProcessor from '@server/job/blocklistedTagsProcessor';
+import feedBuildJob from '@server/job/feedBuild';
 import availabilitySync from '@server/lib/availabilitySync';
 import downloadTracker from '@server/lib/downloadtracker';
 import ImageProxy from '@server/lib/imageproxy';
@@ -252,6 +253,22 @@ export const startJobs = (): void => {
     }),
     running: () => blocklistedTagsProcessor.status().running,
     cancelFn: () => blocklistedTagsProcessor.cancel(),
+  });
+
+  scheduledJobs.push({
+    id: 'feed-build',
+    name: 'Feed Build',
+    type: 'process',
+    interval: 'hours',
+    cronSchedule: jobs['feed-build'].schedule,
+    job: schedule.scheduleJob(jobs['feed-build'].schedule, () => {
+      logger.info('Starting scheduled job: Feed Build', {
+        label: 'Jobs',
+      });
+      feedBuildJob.run();
+    }),
+    running: () => feedBuildJob.status().running,
+    cancelFn: () => feedBuildJob.cancel(),
   });
 
   logger.info('Scheduled jobs loaded', { label: 'Jobs' });
