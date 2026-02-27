@@ -557,7 +557,16 @@ class Settings {
         runConcurrency: 3,
         maxItemsPerProvider: 500,
         rankedItemLimit: 500,
-        providers: {},
+        providers: {
+          tmdb_trending: {
+            enabled: true,
+            weight: 1,
+            options: {
+              timeWindow: 'day',
+              resultLimit: 60,
+            },
+          },
+        },
       },
       jobs: {
         'plex-recently-added-scan': {
