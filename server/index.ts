@@ -6,6 +6,7 @@ import { Session } from '@server/entity/Session';
 import { User } from '@server/entity/User';
 import { startJobs } from '@server/job/schedule';
 import feedManager from '@server/lib/feed';
+import RecentlyAddedProvider from '@server/lib/feed/providers/recentlyAdded';
 import TmdbTrendingProvider from '@server/lib/feed/providers/tmdbTrending';
 import notificationManager from '@server/lib/notifications';
 import DiscordAgent from '@server/lib/notifications/agents/discord';
@@ -141,7 +142,10 @@ app
     ]);
 
     // Register Feed Providers
-    feedManager.registerProviders([new TmdbTrendingProvider()]);
+    feedManager.registerProviders([
+      new TmdbTrendingProvider(),
+      new RecentlyAddedProvider(),
+    ]);
 
     const userRepository = getRepository(User);
     const totalUsers = await userRepository.count();
