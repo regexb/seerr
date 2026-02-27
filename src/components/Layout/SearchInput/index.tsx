@@ -23,7 +23,9 @@ const SearchInput = () => {
           </div>
           <input
             id="search_field"
-            style={{ paddingRight: searchValue.length > 0 ? '1.75rem' : '' }}
+            style={{
+              paddingRight: searchValue.length > 0 ? '1.75rem' : undefined,
+            }}
             className="block w-full rounded-full border border-gray-600 bg-gray-900/80 py-2 pl-10 text-white placeholder-gray-300 hover:border-gray-500 focus:border-gray-500 focus:bg-gray-900 focus:placeholder-gray-400 focus:outline-none focus:ring-0 sm:text-base"
             placeholder={intl.formatMessage(messages.searchPlaceholder)}
             type="search"

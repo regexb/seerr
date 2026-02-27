@@ -23,7 +23,7 @@ feedRoutes.get<never, FeedResponse>('/', async (req, res, next) => {
       return next({ status: 500, message: 'User missing from request.' });
     }
 
-    const { take, mediaType } = feedQuery.parse(req.query);
+    const { take, skip, mediaType } = feedQuery.parse(req.query);
 
     // Quote subquery alias columns so Postgres preserves case (unquoted identifiers fold to lowercase).
     const qb = dataSource
@@ -61,6 +61,7 @@ feedRoutes.get<never, FeedResponse>('/', async (req, res, next) => {
         '((interleaved.rn - 1 + interleaved."sortJitter") * 1.0 / COALESCE(NULLIF(interleaved.weight, 0), 1))',
         'ASC'
       )
+      .skip(skip)
       .take(take)
       .setParameters({
         userId: req.user.id,
