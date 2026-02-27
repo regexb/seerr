@@ -558,6 +558,16 @@ class Settings {
         maxItemsPerProvider: 500,
         rankedItemLimit: 500,
         providers: {
+          recently_added: {
+            enabled: true,
+            weight: 1,
+            options: {
+              resultLimit: 60,
+              windowDays: 30,
+              includeMovies: true,
+              includeTv: true,
+            },
+          },
           tmdb_trending: {
             enabled: true,
             weight: 1,
