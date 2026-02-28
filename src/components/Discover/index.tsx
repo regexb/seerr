@@ -3,18 +3,20 @@ import ConfirmButton from '@app/components/Common/ConfirmButton';
 import LoadingSpinner from '@app/components/Common/LoadingSpinner';
 import PageTitle from '@app/components/Common/PageTitle';
 import Tooltip from '@app/components/Common/Tooltip';
-import { sliderTitles } from '@app/components/Discover/constants';
 import CreateSlider from '@app/components/Discover/CreateSlider';
 import DiscoverSliderEdit from '@app/components/Discover/DiscoverSliderEdit';
 import MovieGenreSlider from '@app/components/Discover/MovieGenreSlider';
 import NetworkSlider from '@app/components/Discover/NetworkSlider';
 import PlexWatchlistSlider from '@app/components/Discover/PlexWatchlistSlider';
-import RecentlyAddedSlider from '@app/components/Discover/RecentlyAddedSlider';
 import RecentRequestsSlider from '@app/components/Discover/RecentRequestsSlider';
+import RecentlyAddedSlider from '@app/components/Discover/RecentlyAddedSlider';
 import StudioSlider from '@app/components/Discover/StudioSlider';
+import SwipeToVoteCtaCard from '@app/components/Discover/SwipeFeed/SwipeToVoteCtaCard';
 import TvGenreSlider from '@app/components/Discover/TvGenreSlider';
+import { sliderTitles } from '@app/components/Discover/constants';
 import MediaSlider from '@app/components/MediaSlider';
 import { encodeURIExtraParams } from '@app/hooks/useDiscover';
+import useSettings from '@app/hooks/useSettings';
 import { Permission, useUser } from '@app/hooks/useUser';
 import globalMessages from '@app/i18n/globalMessages';
 import defineMessages from '@app/utils/defineMessages';
@@ -54,6 +56,7 @@ const messages = defineMessages('components.Discover', {
 
 const Discover = () => {
   const intl = useIntl();
+  const settings = useSettings();
   const { hasPermission } = useUser();
   const { addToast } = useToasts();
   const {
@@ -63,6 +66,8 @@ const Discover = () => {
   } = useSWR<DiscoverSlider[]>('/api/v1/settings/discover');
   const [sliders, setSliders] = useState<Partial<DiscoverSlider>[]>([]);
   const [isEditing, setIsEditing] = useState(false);
+  const canShowSwipeVotingCta =
+    settings.currentSettings.enableVoting && hasPermission(Permission.VOTE);
 
   // We need to sync the state here so that we can modify the changes locally without commiting
   // anything to the server until the user decides to save the changes
@@ -274,6 +279,11 @@ const Discover = () => {
                 url="/api/v1/discover/popular"
                 linkUrl="/discover/popular"
                 hideWhenEmpty
+                prependItems={
+                  canShowSwipeVotingCta
+                    ? [<SwipeToVoteCtaCard key="swipe-to-vote-cta" />]
+                    : undefined
+                }
               />
             );
             break;
