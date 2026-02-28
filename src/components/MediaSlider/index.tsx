@@ -31,6 +31,7 @@ interface MediaSliderProps {
   hideWhenEmpty?: boolean;
   extraParams?: string;
   onNewTitles?: (titleCount: number) => void;
+  prependItems?: JSX.Element[];
 }
 
 const MediaSlider = ({
@@ -41,6 +42,7 @@ const MediaSlider = ({
   sliderKey,
   hideWhenEmpty = false,
   onNewTitles,
+  prependItems = [],
 }: MediaSliderProps) => {
   const settings = useSettings();
   const { hasPermission } = useUser();
@@ -107,7 +109,7 @@ const MediaSlider = ({
     { type: 'or' }
   );
 
-  const finalTitles = titles
+  const mappedTitles = titles
     .slice(0, 20)
     .filter((title) => {
       if (!blocklistVisibility)
@@ -161,6 +163,7 @@ const MediaSlider = ({
           );
       }
     });
+  const finalTitles = [...prependItems, ...mappedTitles];
 
   if (linkUrl && titles.length > 20) {
     finalTitles.push(
