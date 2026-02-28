@@ -14,11 +14,12 @@ import useLocale from '@app/hooks/useLocale';
 import { Transition } from '@headlessui/react';
 import { ArrowRightCircleIcon } from '@heroicons/react/24/outline';
 import { ArrowTopRightOnSquareIcon, StarIcon } from '@heroicons/react/24/solid';
+import type { RTRating } from '@server/api/rating/rottentomatoes';
 import { type RatingResponse } from '@server/api/ratings';
 import type { MovieDetails } from '@server/models/Movie';
 import type { TvDetails } from '@server/models/Tv';
 import Link from 'next/link';
-import { Fragment } from 'react';
+import { Fragment, useState } from 'react';
 import useSWR from 'swr';
 
 type MediaData = MovieDetails | TvDetails | null;
@@ -28,6 +29,9 @@ interface MediaDetailsModalProps {
   onClose: () => void;
   onPass: () => void;
   onInterested: () => void;
+  onRequest?: () => void;
+  showRequestAction?: boolean;
+  canRequest?: boolean;
   mediaType: 'movie' | 'tv';
   tmdbId: number;
   data: MediaData;
@@ -39,6 +43,9 @@ const MediaDetailsModal = ({
   onClose,
   onPass,
   onInterested,
+  onRequest,
+  showRequestAction = false,
+  canRequest = false,
   mediaType,
   tmdbId,
   data,
@@ -46,16 +53,25 @@ const MediaDetailsModal = ({
 }: MediaDetailsModalProps) => {
   const { locale } = useLocale();
 
+  // For swipe-down-to-close
+  const [startY, setStartY] = useState<number | null>(null);
+
+  const isMovie = mediaType === 'movie';
+
   // Fetch ratings (RT, IMDB, etc.)
   const { data: ratingData } = useSWR<RatingResponse>(
-    open && tmdbId ? `/api/v1/${mediaType}/${tmdbId}/ratingscombined` : null
+    open && tmdbId
+      ? `/api/v1/${mediaType}/${tmdbId}/ratings${isMovie ? 'combined' : ''}`
+      : null
   );
 
   if (!data) return null;
 
-  const isMovie = mediaType === 'movie';
   const movieData = isMovie ? (data as MovieDetails) : null;
   const tvData = !isMovie ? (data as TvDetails) : null;
+
+  const rtData = isMovie ? ratingData?.rt : (ratingData as unknown as RTRating);
+  const imdbData = isMovie ? ratingData?.imdb : undefined;
 
   const title = isMovie ? movieData?.title : tvData?.name;
   const releaseDate = isMovie ? movieData?.releaseDate : tvData?.firstAirDate;
@@ -107,7 +123,22 @@ const MediaDetailsModal = ({
         >
           <div className="relative flex h-[92%] w-full flex-col rounded-t-3xl border-t border-white/10 bg-gray-950 shadow-2xl">
             {/* Drag Handle */}
-            <div className="flex justify-center py-3">
+            <div
+              className="flex justify-center py-3"
+              onTouchStart={(e) => {
+                setStartY(e.touches[0].clientY);
+              }}
+              onTouchMove={(e) => {
+                if (startY !== null) {
+                  const currentY = e.touches[0].clientY;
+                  if (currentY - startY > 50) {
+                    onClose();
+                    setStartY(null);
+                  }
+                }
+              }}
+              onTouchEnd={() => setStartY(null)}
+            >
               <div className="h-1.5 w-16 rounded-full bg-gray-700" />
             </div>
 
@@ -157,58 +188,57 @@ const MediaDetailsModal = ({
                             {tvData.numberOfSeasons > 1 ? 's' : ''}
                           </span>
                         )}
-                        {data.voteAverage != null && (
+                        {data.voteAverage != null && data.voteAverage > 0 && (
                           <span className="flex items-center gap-1 rounded-lg border border-white/10 bg-black/45 px-3 py-1 font-bold text-amber-300 shadow-sm backdrop-blur-sm">
                             <StarIcon className="h-3.5 w-3.5 fill-current" />
                             {data.voteAverage.toFixed(1)}
                           </span>
                         )}
-                        {ratingData?.rt?.criticsRating &&
-                          typeof ratingData?.rt?.criticsScore === 'number' && (
+                        {rtData?.criticsRating &&
+                          typeof rtData?.criticsScore === 'number' && (
                             <Tooltip content="Rotten Tomatoes Tomatometer">
                               <a
-                                href={ratingData.rt.url}
+                                href={rtData.url}
                                 className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-black/45 px-3 py-1 text-sm font-semibold text-white shadow-sm transition hover:bg-black/60"
                                 target="_blank"
                                 rel="noreferrer"
                               >
-                                {ratingData.rt.criticsRating === 'Rotten' ? (
+                                {rtData.criticsRating === 'Rotten' ? (
                                   <RTRotten className="w-5" />
                                 ) : (
                                   <RTFresh className="w-5" />
                                 )}
-                                <span>{ratingData.rt.criticsScore}%</span>
+                                <span>{rtData.criticsScore}%</span>
                               </a>
                             </Tooltip>
                           )}
-                        {ratingData?.rt?.audienceRating &&
-                          !!ratingData?.rt?.audienceScore && (
-                            <Tooltip content="RT Audience Score">
-                              <a
-                                href={ratingData.rt.url}
-                                className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-black/45 px-3 py-1 text-sm font-semibold text-white shadow-sm transition hover:bg-black/60"
-                                target="_blank"
-                                rel="noreferrer"
-                              >
-                                {ratingData.rt.audienceRating === 'Spilled' ? (
-                                  <RTAudRotten className="w-5" />
-                                ) : (
-                                  <RTAudFresh className="w-5" />
-                                )}
-                                <span>{ratingData.rt.audienceScore}%</span>
-                              </a>
-                            </Tooltip>
-                          )}
-                        {ratingData?.imdb?.criticsScore && (
+                        {rtData?.audienceRating && !!rtData?.audienceScore && (
+                          <Tooltip content="RT Audience Score">
+                            <a
+                              href={rtData.url}
+                              className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-black/45 px-3 py-1 text-sm font-semibold text-white shadow-sm transition hover:bg-black/60"
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              {rtData.audienceRating === 'Spilled' ? (
+                                <RTAudRotten className="w-5" />
+                              ) : (
+                                <RTAudFresh className="w-5" />
+                              )}
+                              <span>{rtData.audienceScore}%</span>
+                            </a>
+                          </Tooltip>
+                        )}
+                        {imdbData?.criticsScore && (
                           <Tooltip content="IMDB User Score">
                             <a
-                              href={ratingData.imdb.url}
+                              href={imdbData.url}
                               className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-black/45 px-3 py-1 text-sm font-semibold text-white shadow-sm transition hover:bg-black/60"
                               target="_blank"
                               rel="noreferrer"
                             >
                               <ImdbLogo className="mr-0.5 w-5" />
-                              <span>{ratingData.imdb.criticsScore}</span>
+                              <span>{imdbData.criticsScore}</span>
                             </a>
                           </Tooltip>
                         )}
@@ -316,6 +346,10 @@ const MediaDetailsModal = ({
                 <VoteButtons
                   onPass={onPass}
                   onInterested={onInterested}
+                  onRequest={onRequest}
+                  showRequestAction={showRequestAction}
+                  canRequest={canRequest}
+                  mediaStatus={(data as any)?.mediaInfo?.status}
                   currentVote={currentVote}
                 />
               </div>
