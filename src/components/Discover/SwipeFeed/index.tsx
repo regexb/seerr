@@ -6,7 +6,10 @@ import type {
 } from '@app/components/Discover/SwipeFeed/SwipeableCard';
 import SwipeableCard from '@app/components/Discover/SwipeFeed/SwipeableCard';
 import VoteButtons from '@app/components/Discover/SwipeFeed/VoteButtons';
+import RequestModal from '@app/components/RequestModal';
+import { Permission, useUser } from '@app/hooks/useUser';
 import { ArrowPathIcon } from '@heroicons/react/24/outline';
+import { MediaRequestStatus, MediaStatus } from '@server/constants/media';
 import type { FeedItemResponse } from '@server/interfaces/api/feedInterfaces';
 import type { MovieDetails } from '@server/models/Movie';
 import type { TvDetails } from '@server/models/Tv';
@@ -31,20 +34,38 @@ interface VoteLookupResponse {
   } | null;
 }
 
+type SwipeDirection = 'left' | 'right' | 'up';
+
 const BATCH_SIZE = 10;
 const PREFETCH_THRESHOLD = 6;
 
 /** Unique key for deduplication in case of timing issues. */
 const itemKey = (mediaType: string, tmdbId: number) => `${mediaType}-${tmdbId}`;
 
+const getPendingRequestOwner = (requests: unknown[]): number | undefined => {
+  const pendingRequest = requests.find((request) => {
+    if (!request || typeof request !== 'object') return false;
+    return (
+      (request as { status?: MediaRequestStatus }).status ===
+        MediaRequestStatus.PENDING && !(request as { is4k?: boolean }).is4k
+    );
+  }) as { requestedBy?: { id?: number } } | undefined;
+
+  return pendingRequest?.requestedBy?.id;
+};
+
 const SwipeFeed = () => {
   const { addToast } = useToasts();
+  const { hasPermission, user } = useUser();
   const [queue, setQueue] = useState<SwipeCardItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showUnderCard, setShowUnderCard] = useState(true);
   const [isExhausted, setIsExhausted] = useState(false);
   const [isVoting, setIsVoting] = useState(false);
   const [detailsIndex, setDetailsIndex] = useState<number | null>(null);
+  const [requestItem, setRequestItem] = useState<SwipeCardItem | null>(null);
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+  const [isRequestHolding, setIsRequestHolding] = useState(false);
   const [currentVote, setCurrentVote] = useState<
     'interested' | 'not_interested' | null
   >(null);
@@ -55,6 +76,7 @@ const SwipeFeed = () => {
   /** Unique per mount so we don't reuse cached feed when navigating back. */
   const mountKey = useRef(Date.now());
   const [refreshId, setRefreshId] = useState(0);
+  const isCompletingRequest = useRef(false);
 
   // Cache key includes mountKey + refreshId so back-navigation/Refresh get fresh data; fetcher only sends take/skip to API.
   const initialFeedKey = [
@@ -192,6 +214,59 @@ const SwipeFeed = () => {
     }
   }, [currentIndex, queue.length, isExhausted, fetchNextPage]);
 
+  const canRequestMedia = useCallback(
+    (item?: SwipeCardItem | null) => {
+      if (!item) return false;
+
+      const hasRequestPermission = hasPermission(
+        [
+          Permission.REQUEST,
+          item.mediaType === 'movie'
+            ? Permission.REQUEST_MOVIE
+            : Permission.REQUEST_TV,
+        ],
+        { type: 'or' }
+      );
+
+      if (!hasRequestPermission) {
+        return false;
+      }
+
+      const mediaInfo = (
+        item.tmdbData as { mediaInfo?: Record<string, unknown> }
+      )?.mediaInfo;
+      if (!mediaInfo) {
+        return true;
+      }
+
+      const status = mediaInfo.status as MediaStatus | undefined;
+      const requests = Array.isArray(mediaInfo.requests)
+        ? (mediaInfo.requests as unknown[])
+        : [];
+      const activeRequestOwnerId = getPendingRequestOwner(requests);
+
+      if (
+        status === MediaStatus.UNKNOWN ||
+        (status === MediaStatus.DELETED && activeRequestOwnerId === undefined)
+      ) {
+        return true;
+      }
+
+      if (
+        item.mediaType === 'tv' &&
+        status !== MediaStatus.BLOCKLISTED &&
+        status !== MediaStatus.AVAILABLE &&
+        status !== MediaStatus.PARTIALLY_AVAILABLE &&
+        activeRequestOwnerId !== user?.id
+      ) {
+        return true;
+      }
+
+      return false;
+    },
+    [hasPermission, user?.id]
+  );
+
   // Delay mounting the newly queued under-card until after the top-card handoff.
   useEffect(() => {
     setShowUnderCard(false);
@@ -224,19 +299,45 @@ const SwipeFeed = () => {
     [addToast]
   );
 
+  const openRequestFlow = useCallback(() => {
+    const item = queue[currentIndex];
+    if (!item || !canRequestMedia(item)) {
+      return;
+    }
+
+    setDetailsIndex(null);
+    setRequestItem(item);
+    setIsRequestHolding(true);
+    setIsRequestModalOpen(true);
+  }, [canRequestMedia, currentIndex, queue]);
+
   const handleSwipe = useCallback(
-    (direction: 'left' | 'right') => {
+    async (direction: SwipeDirection) => {
       const item = queue[currentIndex];
       if (!item) return;
 
+      if (direction === 'up') {
+        if (isCompletingRequest.current) {
+          isCompletingRequest.current = false;
+          setRequestItem(null);
+          setIsRequestHolding(false);
+          setCurrentIndex((i) => i + 1);
+          setCurrentVote(null);
+          return;
+        }
+
+        openRequestFlow();
+        return;
+      }
+
       const actionType =
         direction === 'right' ? 'interested' : 'not_interested';
-      submitVote(item, actionType);
+      await submitVote(item, actionType);
       setCurrentIndex((i) => i + 1);
       setDetailsIndex(null);
       setCurrentVote(null);
     },
-    [currentIndex, queue, submitVote]
+    [currentIndex, openRequestFlow, queue, submitVote]
   );
 
   const handleButtonPass = useCallback(() => {
@@ -247,13 +348,21 @@ const SwipeFeed = () => {
     cardRef.current?.triggerSwipe('right');
   }, []);
 
+  const handleButtonRequest = useCallback(() => {
+    openRequestFlow();
+  }, [openRequestFlow]);
+
   const handleRefresh = useCallback(() => {
     hasInitialized.current = false;
+    isCompletingRequest.current = false;
     seenIds.current = new Set();
     setRefreshId((r) => r + 1);
     setQueue([]);
     setCurrentIndex(0);
     setIsExhausted(false);
+    setRequestItem(null);
+    setIsRequestModalOpen(false);
+    setIsRequestHolding(false);
     setCurrentVote(null);
   }, []);
 
@@ -271,6 +380,22 @@ const SwipeFeed = () => {
   const isFinished = currentIndex >= queue.length && queue.length > 0;
   const isEmpty = queue.length === 0 && !isLoading;
   const detailsItem = detailsIndex !== null ? queue[detailsIndex] : null;
+  const hasRequestPermissionForType = (mediaType: 'movie' | 'tv') =>
+    hasPermission(
+      [
+        Permission.REQUEST,
+        mediaType === 'movie'
+          ? Permission.REQUEST_MOVIE
+          : Permission.REQUEST_TV,
+      ],
+      { type: 'or' }
+    );
+  const canCurrentItemRequest = canRequestMedia(currentItem);
+  const canDetailsItemRequest = canRequestMedia(detailsItem);
+  const showRequestAction =
+    !!currentItem && hasRequestPermissionForType(currentItem.mediaType);
+  const showDetailsRequestAction =
+    !!detailsItem && hasRequestPermissionForType(detailsItem.mediaType);
 
   // Backdrop image
   const backdropUrl = currentItem?.tmdbData?.backdropPath
@@ -328,6 +453,8 @@ const SwipeFeed = () => {
                 isTop={false}
                 onSwipe={() => {}}
                 onTapDetails={() => {}}
+                canRequest={false}
+                isRequestHolding={false}
               />
             )}
             {currentItem && (
@@ -338,6 +465,8 @@ const SwipeFeed = () => {
                 isTop={true}
                 onSwipe={handleSwipe}
                 onTapDetails={() => setDetailsIndex(currentIndex)}
+                canRequest={canCurrentItemRequest}
+                isRequestHolding={isRequestHolding}
               />
             )}
           </>
@@ -350,7 +479,11 @@ const SwipeFeed = () => {
           <VoteButtons
             onPass={handleButtonPass}
             onInterested={handleButtonInterested}
+            onRequest={handleButtonRequest}
             disabled={isVoting || !currentItem}
+            showRequestAction={showRequestAction}
+            canRequest={canCurrentItemRequest}
+            mediaStatus={(currentItem?.tmdbData as any)?.mediaInfo?.status}
             currentVote={currentVote}
           />
         </div>
@@ -364,6 +497,9 @@ const SwipeFeed = () => {
         tmdbId={detailsItem?.tmdbId || 0}
         data={detailsItem?.tmdbData || null}
         currentVote={currentVote}
+        onRequest={openRequestFlow}
+        showRequestAction={showDetailsRequestAction}
+        canRequest={canDetailsItemRequest}
         onPass={() => {
           setDetailsIndex(null);
           setTimeout(() => cardRef.current?.triggerSwipe('left'), 100);
@@ -373,6 +509,24 @@ const SwipeFeed = () => {
           setTimeout(() => cardRef.current?.triggerSwipe('right'), 100);
         }}
       />
+      {requestItem && (
+        <RequestModal
+          show={isRequestModalOpen}
+          type={requestItem.mediaType}
+          tmdbId={requestItem.tmdbId}
+          onComplete={() => {
+            setIsRequestModalOpen(false);
+            isCompletingRequest.current = true;
+            cardRef.current?.triggerSwipe('up');
+          }}
+          onCancel={() => {
+            setIsRequestModalOpen(false);
+            setIsRequestHolding(false);
+            setRequestItem(null);
+            cardRef.current?.resetCard();
+          }}
+        />
+      )}
     </div>
   );
 };
