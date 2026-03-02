@@ -579,6 +579,18 @@ class Settings {
               resultLimit: 60,
             },
           },
+          similar_interested: {
+            enabled: true,
+            weight: 1,
+            options: {
+              resultLimit: 100,
+              windowDays: 30,
+              maxSeeds: 20,
+              maxSimilarPerSeed: 20,
+              minSimilarPerSeed: 3,
+              recencyHalfLifeDays: 14,
+            },
+          },
         },
       },
       jobs: {
