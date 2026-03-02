@@ -7,6 +7,7 @@ import { User } from '@server/entity/User';
 import { startJobs } from '@server/job/schedule';
 import feedManager from '@server/lib/feed';
 import RecentlyAddedProvider from '@server/lib/feed/providers/recentlyAdded';
+import SimilarInterestedProvider from '@server/lib/feed/providers/similarInterested';
 import TmdbTrendingProvider from '@server/lib/feed/providers/tmdbTrending';
 import notificationManager from '@server/lib/notifications';
 import DiscordAgent from '@server/lib/notifications/agents/discord';
@@ -145,6 +146,7 @@ app
     feedManager.registerProviders([
       new TmdbTrendingProvider(),
       new RecentlyAddedProvider(),
+      new SimilarInterestedProvider(),
     ]);
 
     const userRepository = getRepository(User);
