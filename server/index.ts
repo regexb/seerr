@@ -8,6 +8,7 @@ import { startJobs } from '@server/job/schedule';
 import feedManager from '@server/lib/feed';
 import RecentlyAddedProvider from '@server/lib/feed/providers/recentlyAdded';
 import SimilarInterestedProvider from '@server/lib/feed/providers/similarInterested';
+import SimilarRequestedProvider from '@server/lib/feed/providers/similarRequested';
 import TmdbTrendingProvider from '@server/lib/feed/providers/tmdbTrending';
 import notificationManager from '@server/lib/notifications';
 import DiscordAgent from '@server/lib/notifications/agents/discord';
@@ -147,6 +148,7 @@ app
       new TmdbTrendingProvider(),
       new RecentlyAddedProvider(),
       new SimilarInterestedProvider(),
+      new SimilarRequestedProvider(),
     ]);
 
     const userRepository = getRepository(User);
