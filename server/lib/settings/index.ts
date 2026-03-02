@@ -588,6 +588,18 @@ class Settings {
               recencyHalfLifeDays: 14,
             },
           },
+          similar_requested: {
+            enabled: true,
+            weight: 1.2,
+            options: {
+              resultLimit: 150,
+              windowDays: 90,
+              maxSeeds: 20,
+              maxSimilarPerSeed: 20,
+              minSimilarPerSeed: 5,
+              recencyHalfLifeDays: 30,
+            },
+          },
         },
       },
       jobs: {
