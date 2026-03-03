@@ -579,6 +579,19 @@ class Settings {
               resultLimit: 60,
             },
           },
+          tmdb_high_floor_random: {
+            enabled: true,
+            weight: 0.1,
+            options: {
+              resultLimit: 200,
+              minVoteCount: 500,
+              minVoteAverage: 7,
+              minReleaseYear: 1980,
+              maxPagesPoolMovies: 50,
+              maxPagesPoolTv: 30,
+              movieRatio: 0.8,
+            },
+          },
           similar_interested: {
             enabled: true,
             weight: 1,
